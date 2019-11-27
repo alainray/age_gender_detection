@@ -1,0 +1,17 @@
+PREPROCESS:
+    LABEL_PATH: 'imdb/imdb.mat'
+    FEATURES: ['../../storage/fairface.pth','../../storage/features.pth']
+TRAIN:
+    LEARNING_RATE: 0.0001
+    BATCH_SIZE: 32
+    MAX_EPOCHS: 30
+    PATIENCE: 2
+    TRAIN_RATIO: 0.8
+TEST:
+    BATCH_SIZE: 64
+
+MODEL:
+    AGE_LAMBDA: 0.5
+
+DATASET:
+    DATA_FOLDER: ['../../storage','../../storage/imdb_crop']
