@@ -4,9 +4,9 @@ from age_gender import Age_Gender_Model
 from imdb import IMDBDataset
 import torch
 import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, ConcatDataset,DataLoader
 from torchvision import transforms, utils
-from torchvision.transforms import RandomHorizontalFlip, ToTensor, RandomCrop, Resize, CenterCrop
+from torchvision.transforms import RandomHorizontalFlip, RandomGrayscale, ToTensor, RandomCrop, Resize, CenterCrop
 import argparse
 from config import cfg, cfg_from_file
 
@@ -14,42 +14,55 @@ def init_model(cfg, device):
   print("Creating Model...")
   model = Age_Gender_Model()
   model.to(device)
-  return model
-def init_loaders(x, y, cfg):
-  print("Loading Datasets...")
-  X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=(1-cfg.TRAIN.TRAIN_RATIO), random_state=42)
-  X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.15, random_state=42)
 
-  train_data = IMDBDataset(X_train, y_train, root_dir=cfg.DATASET.DATA_FOLDER, transform=transforms.Compose([
-                                               Resize(224),
+  if cfg.MODEL.LOAD_CHECKPOINT is not '':
+    check=torch.load(cfg.MODEL.LOAD_CHECKPOINT)
+    model.load_state_dict(check['model'])
+  return model
+def init_datasets(x,y,cfg):
+  # We assume IMDB, FairFace
+  print("Loading Datasets...")
+  transforms_train =transforms.Compose([       Resize(224),
                                                RandomHorizontalFlip(0.5),
                                                RandomCrop(224),
+                                               RandomGrayscale(0.5),
                                                ToTensor(),
                                                transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                                 std=[0.229, 0.224, 0.225])
-                                           ]))
-  val_data = IMDBDataset(X_val, y_val, root_dir=cfg.DATASET.DATA_FOLDER, transform=transforms.Compose([
-                                               Resize(224),
+                                               ])
+  transforms_val = transforms.Compose([        Resize(224),
+                                               RandomHorizontalFlip(0.5),
                                                CenterCrop(224),
+                                               RandomGrayscale(0.5),
                                                ToTensor(),
                                                transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                                std=[0.229, 0.224, 0.225])
-                                           ]))
-  test_data = IMDBDataset(X_test, y_test, root_dir=cfg.DATASET.DATA_FOLDER, transform=transforms.Compose([
-                                               Resize(224),
-                                               CenterCrop(224),
-                                               ToTensor(),
-                                               transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                                std=[0.229, 0.224, 0.225])
-                                           ]))
+                                               std=[0.229, 0.224, 0.225])
+                                               ])
+                                               
+  datasets = {k: [] for k in ['train','val','test']}
+
+  for i, (x_val,y_val) in enumerate(zip(x,y)):
+      #print(x_val,y_val)
+      X_train, X_test, y_train, y_test = train_test_split(x_val, y_val, test_size=(1-cfg.TRAIN.TRAIN_RATIO), random_state=42)
+      X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.15, random_state=42)
+      datasets['train'].append(IMDBDataset(X_train, y_train, root_dir=cfg.DATASET.DATA_FOLDER[i], transform=transforms_train))
+      datasets['val'].append(IMDBDataset(X_val, y_val, root_dir=cfg.DATASET.DATA_FOLDER[i], transform=transforms_val))
+      datasets['test'].append(IMDBDataset(X_test, y_test, root_dir=cfg.DATASET.DATA_FOLDER[i], transform=transforms_val))
+  
+  for k in ['train','val','test']:
+      datasets[k] = ConcatDataset(datasets[k])
+  return datasets
+
+
+def init_loaders(datasets, cfg, splits='auto'):
+  print("Loading Data Loaders...")
   dataloaders = dict()
-  print("Loading dataloaders...")
-  dataloaders['train'] = DataLoader(train_data, batch_size=cfg.TRAIN.BATCH_SIZE, shuffle=True)
-  dataloaders['val'] = DataLoader(val_data, batch_size=cfg.TEST.BATCH_SIZE, shuffle=False)
-  dataloaders['test']= DataLoader(test_data, batch_size=cfg.TEST.BATCH_SIZE, shuffle=False)
-
+  for k in ['train','val','test']:    
+      if k == 'train':
+          dataloaders[k] = DataLoader(datasets[k], batch_size=cfg.TRAIN.BATCH_SIZE, shuffle=True)
+      else:
+          dataloaders[k] = DataLoader(datasets[k], batch_size=cfg.TEST.BATCH_SIZE, shuffle=False)
   return dataloaders
-
 def init_optimizers(cfg, model):
   
   print("Loading optimization variables")
@@ -59,7 +72,9 @@ def init_optimizers(cfg, model):
                              eps=1e-08,
                              weight_decay=0,
                              amsgrad=False)
-  
+  if cfg.MODEL.LOAD_CHECKPOINT is not '':
+    check = torch.load(cfg.MODEL.LOAD_CHECKPOINT)
+    optimizer.load_state_dict(check['optim'])
   scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience = cfg.TRAIN.PATIENCE )
   criterion = nn.CrossEntropyLoss()
 
@@ -67,7 +82,8 @@ def init_optimizers(cfg, model):
 
 def training_loop(x,y, cfg, exp_name="exp_1", device=torch.device('cuda'),starting_epoch = 1):
   model = init_model(cfg, device)
-  dataloaders = init_loaders(x,y,cfg)
+  datasets = init_datasets(x,y,cfg)
+  dataloaders = init_loaders(datasets,cfg)
   optim = init_optimizers(cfg, model)
   n_epochs = cfg.TRAIN.MAX_EPOCHS
   experiment = Experiment(project_name='mbm-pos-metrics',api_key = 'w4JbvdIWlas52xdwict9MwmyH')
@@ -84,7 +100,8 @@ def training_loop(x,y, cfg, exp_name="exp_1", device=torch.device('cuda'),starti
       print("Epoch {}/{} - {}".format(epoch, n_epochs, phase.upper()))
       forward_model(model, dataloaders[phase], optim, cfg, device, experiment, phase, current_epoch = epoch)
     # checkpoint model
-    torch.save(model,"checkpoints/{}_{}.pth".format(exp_name, epoch))
+    check = {'model': model.state_dict(), 'optim': optim['optimizer'].state_dict()}
+    torch.save(check, "../../storage/mbm/checkpoints/{}_{}.pth".format(exp_name, epoch))
   experiment.end()
   return experiment
 import time
@@ -179,5 +196,7 @@ args = parse_args()
 if args.cfg_file is not None:
   cfg_from_file(args.cfg_file)
 
-data = torch.load(cfg.PREPROCESS.FEATURES)
-e = training_loop(data['img'], data['target'], cfg, exp_name = args.name)
+data = torch.load(cfg.PREPROCESS.FEATURES[0])
+data2 = torch.load(cfg.PREPROCESS.FEATURES[1])
+print(len(data['img']), len(data2['img']))
+e = training_loop([data['img'],data2['img']], [data['target'],data2['target']], cfg, exp_name = args.name)

@@ -16,7 +16,7 @@ __C.WORKERS = 4
 # Preprocess options
 __C.PREPROCESS = edict()
 __C.PREPROCESS.LABEL_PATH = 'imdb/imdb.mat'
-__C.PREPROCESS.FEATURES = 'features.pth'
+__C.PREPROCESS.FEATURES = ['features.pth']
 __C.PREPROCESS = dict(__C.PREPROCESS)
 
 # Training options
@@ -44,11 +44,11 @@ __C.TEST = dict(__C.TEST)
 __C.MODEL = edict()
 __C.MODEL.AGE_LAMBDA = 0.5
 __C.MODEL = dict(__C.MODEL)
-
+__C.MODEL.LOAD_CHECKPOINT = ''
 
 # Dataset options
 __C.DATASET = edict()
-__C.DATASET.DATA_FOLDER = 'imdb_crop'
+__C.DATASET.DATA_FOLDER = ['storage/imdb_crop','storage/fairface']
 __C.DATASET = dict(__C.DATASET)
 
 
