@@ -12,7 +12,7 @@ from config import cfg, cfg_from_file
 
 def init_model(cfg, device):
   print("Creating Model...")
-  model = Age_Gender_Model()
+  model = Age_Gender_Model(age_classes = cfg.MODEL.AGE_NUM_CLASSES)
   model.to(device)
 
   if cfg.MODEL.LOAD_CHECKPOINT is not '':
@@ -70,7 +70,7 @@ def init_optimizers(cfg, model):
                              lr=cfg.TRAIN.LEARNING_RATE,
                              betas=(0.9, 0.999),
                              eps=1e-08,
-                             weight_decay=0,
+                             weight_decay=cfg.MODEL.WEIGHT_DECAY,
                              amsgrad=False)
   if cfg.MODEL.LOAD_CHECKPOINT is not '':
     check = torch.load(cfg.MODEL.LOAD_CHECKPOINT)
@@ -91,12 +91,13 @@ def training_loop(x,y, cfg, exp_name="exp_1", device=torch.device('cuda'),starti
   hyper = {'train_batch_size': cfg.TRAIN.BATCH_SIZE,
            'age_lambda': cfg.MODEL.AGE_LAMBDA,
            'n_epochs': cfg.TRAIN.MAX_EPOCHS,
-           'learning_rate': cfg.TRAIN.LEARNING_RATE}
+           'learning_rate': cfg.TRAIN.LEARNING_RATE,
+           'weight_decay': cfg.MODEL.WEIGHT_DECAY}
 
   experiment.log_parameters(hyper)
   print("Starting training loop!")
   for epoch in range(starting_epoch, n_epochs + 1):
-    for phase in ['train', 'val']:
+    for phase in ['train', 'val', 'test']:
       print("Epoch {}/{} - {}".format(epoch, n_epochs, phase.upper()))
       forward_model(model, dataloaders[phase], optim, cfg, device, experiment, phase, current_epoch = epoch)
     # checkpoint model
@@ -198,5 +199,10 @@ if args.cfg_file is not None:
 
 data = torch.load(cfg.PREPROCESS.FEATURES[0])
 data2 = torch.load(cfg.PREPROCESS.FEATURES[1])
-print(len(data['img']), len(data2['img']))
-e = training_loop([data['img'],data2['img']], [data['target'],data2['target']], cfg, exp_name = args.name)
+#print(len(data['img']), len(data2['img']))
+e = training_loop([data['img']
+                  ,data2['img']
+                  ],
+                  [data['target']
+                  ,data2['target']
+                  ], cfg, exp_name = args.name)

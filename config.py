@@ -45,6 +45,8 @@ __C.MODEL = edict()
 __C.MODEL.AGE_LAMBDA = 0.5
 __C.MODEL = dict(__C.MODEL)
 __C.MODEL.LOAD_CHECKPOINT = ''
+__C.MODEL.WEIGHT_DECAY = 0.0
+__C.MODEL.AGE_NUM_CLASSES = 4
 
 # Dataset options
 __C.DATASET = edict()

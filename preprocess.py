@@ -27,6 +27,26 @@ def to_age_range(age):
     return 2 # Adult
   else:
     return 3 # Elderly > 60
+
+def to_age_range2(age):
+  if age < 13:
+    return 0 # < 13 yr old
+  elif age >=13 and age <=20: # Gen Z (13-20)
+    return 1
+  elif age >= 21 and age <35: # Gen Millenial (21-34)
+    return 2
+  elif age >=35 and age <=50: #Gen X (35-50)
+    return 3
+  else:
+    return 4                 # > Baby boomer > 50
+
+def to_age_range3(age):
+  if age < 20:
+    return 0 # joven
+  elif age >=20 and  age <60:
+    return 1
+  else:
+    return 2
 ## ------------------------------------------------------------------------------
 # 0 - dob: date of birth (Matlab serial date number)
 # 1 - photo_taken: year when the photo was taken
@@ -64,11 +84,11 @@ de['age'] = de['photo_date']- de['birth_date']
 de['age'] = de['age'].apply(lambda x: int(x.days/365))
 de['age'] = de['age'].apply(lambda x: x if x<=100 else 100) # We clip to 100
 # Finally we create an age range
-de['age_range'] = de['age'].apply(to_age_range)
+de['age_range'] = de['age'].apply(to_age_range3)
 
 X = de['path'].tolist()
 y = [(x,y) for x,y in zip(de['gender'].tolist(), de['age_range'].tolist())]
 
 data = {'img': X, 'target': y}
 
-torch.save(data, "features.pth")
+torch.save(data, "features_newage2.pth")
